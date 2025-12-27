@@ -1,0 +1,453 @@
+import React, { useState, useEffect, useRef } from 'react';
+import { Play, Pause, RotateCcw, Settings, Upload, Check, Clock, Palette, Sun, Eye, Type, X } from 'lucide-react';
+
+const App = () => {
+  // --- Cấu hình thời gian (State) ---
+  const [durations, setDurations] = useState({
+    focus: 45,
+    shortBreak: 5,
+    longBreak: 15,
+  });
+
+  const MODES = {
+    focus: { id: 'focus', label: 'Tập trung' },
+    shortBreak: { id: 'shortBreak', label: 'Nghỉ ngắn' },
+    longBreak: { id: 'longBreak', label: 'Nghỉ dài' },
+  };
+
+  const modeKeys = Object.keys(MODES);
+
+  // --- State quản lý đồng hồ ---
+  const [mode, setMode] = useState('focus');
+  const [timeLeft, setTimeLeft] = useState(durations.focus * 60);
+  const [isActive, setIsActive] = useState(false);
+  const timerRef = useRef(null);
+
+  // --- State quản lý Giao diện & Hình nền ---
+  const [bgType, setBgType] = useState('image');
+  const [bgUrl, setBgUrl] = useState('https://images.unsplash.com/photo-1470252649378-9c29740c9fa8?q=80&w=2070&auto=format&fit=crop');
+  const [customInput, setCustomInput] = useState('');
+  
+  // Các biến tuỳ chỉnh
+  const [bgBrightness, setBgBrightness] = useState(0.8);
+  const [bgBlur, setBgBlur] = useState(0); 
+  const [textColor, setTextColor] = useState('#ffffff');
+  const [glassOpacity, setGlassOpacity] = useState(0.1);
+  
+  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [activeTab, setActiveTab] = useState('timer');
+  
+  const soundEnabled = true;
+
+  // Cập nhật thời gian
+  useEffect(() => {
+    if (!isActive) {
+      setTimeLeft(durations[mode] * 60);
+    }
+  }, [durations, mode]);
+
+  // Logic Đồng hồ
+  useEffect(() => {
+    if (isActive && timeLeft > 0) {
+      timerRef.current = setInterval(() => {
+        setTimeLeft((prev) => prev - 1);
+      }, 1000);
+    } else if (timeLeft === 0) {
+      clearInterval(timerRef.current);
+      setIsActive(false);
+      if (soundEnabled) playNotificationSound();
+    }
+    return () => clearInterval(timerRef.current);
+  }, [isActive, timeLeft, soundEnabled]);
+
+  useEffect(() => {
+    const minutes = Math.floor(timeLeft / 60);
+    const seconds = timeLeft % 60;
+    document.title = `${minutes}:${seconds < 10 ? '0' : ''}${seconds} - ${MODES[mode].label}`;
+  }, [timeLeft, mode]);
+
+  const toggleTimer = () => setIsActive(!isActive);
+
+  const resetTimer = () => {
+    setIsActive(false);
+    setTimeLeft(durations[mode] * 60);
+  };
+
+  const changeMode = (newMode) => {
+    setMode(newMode);
+    setIsActive(false);
+    setTimeLeft(durations[newMode] * 60);
+  };
+
+  const handleDurationChange = (key, value) => {
+    const val = parseInt(value);
+    if (!isNaN(val) && val > 0) {
+      setDurations(prev => ({ ...prev, [key]: val }));
+    }
+  };
+
+  const formatTime = (seconds) => {
+    const m = Math.floor(seconds / 60);
+    const s = seconds % 60;
+    return `${m < 10 ? '0' : ''}${m}:${s < 10 ? '0' : ''}${s}`;
+  };
+
+  const handleFileUpload = (e) => {
+    const file = e.target.files[0];
+    if (file) {
+      const url = URL.createObjectURL(file);
+      setBgUrl(url);
+      setBgType(file.type.startsWith('video') ? 'video' : 'image');
+      setCustomInput('');
+    }
+  };
+
+  const handleUrlSubmit = () => {
+    if (customInput) {
+      setBgUrl(customInput);
+      const isVideo = customInput.match(/\.(mp4|webm|ogg)$/i);
+      setBgType(isVideo ? 'video' : 'image');
+    }
+  };
+
+  const playNotificationSound = () => {
+    const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+    const oscillator = audioContext.createOscillator();
+    const gainNode = audioContext.createGain();
+    oscillator.connect(gainNode);
+    gainNode.connect(audioContext.destination);
+    oscillator.type = 'sine';
+    oscillator.frequency.value = 880; 
+    gainNode.gain.value = 0.1;
+    oscillator.start();
+    setTimeout(() => oscillator.stop(), 500);
+  };
+
+  // --- CSS Styles ---
+  const styles = `
+    :root {
+      --glass-opacity: ${glassOpacity};
+      --text-color: ${textColor};
+    }
+
+    /* Animation mở rộng từ nút Settings */
+    @keyframes expand-panel {
+      from {
+        opacity: 0;
+        transform: scale(0.5) translate(100px, 100px); /* Bắt đầu nhỏ và lệch về phía nút */
+      }
+      to {
+        opacity: 1;
+        transform: scale(1) translate(0, 0);
+      }
+    }
+
+    .animate-expand-settings {
+      animation: expand-panel 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+      transform-origin: bottom right; /* Quan trọng: điểm gốc animation */
+    }
+
+    .glass-element {
+      background: linear-gradient(
+        135deg, 
+        rgba(255, 255, 255, calc(var(--glass-opacity) + 0.1)) 0%, 
+        rgba(255, 255, 255, var(--glass-opacity)) 100%
+      );
+      backdrop-filter: blur(12px) saturate(160%) contrast(110%);
+      -webkit-backdrop-filter: blur(12px) saturate(160%) contrast(110%);
+      border-top: 1px solid rgba(255, 255, 255, 0.4);
+      border-left: 1px solid rgba(255, 255, 255, 0.4);
+      border-right: 1px solid rgba(255, 255, 255, 0.1);
+      border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+      box-shadow: 
+        0 10px 30px rgba(0, 0, 0, 0.1),
+        inset 1px 1px 2px rgba(255, 255, 255, 0.3),
+        inset -5px -5px 15px rgba(0, 0, 0, 0.05),
+        inset 5px 5px 15px rgba(255, 255, 255, 0.2);
+      color: var(--text-color);
+      /* Default radius, sẽ bị override bởi class utilities */
+      border-radius: 24px;
+    }
+    
+    /* Class riêng để ép bo tròn viên thuốc */
+    .glass-pill {
+      border-radius: 9999px !important;
+    }
+    
+    .glass-button {
+      background: linear-gradient(
+        145deg, 
+        rgba(255, 255, 255, 0.15) 0%, 
+        rgba(255, 255, 255, 0.05) 100%
+      );
+      backdrop-filter: blur(8px) saturate(180%);
+      -webkit-backdrop-filter: blur(8px) saturate(180%);
+      border: 1px solid rgba(255, 255, 255, 0.2);
+      border-top: 1px solid rgba(255, 255, 255, 0.5);
+      border-left: 1px solid rgba(255, 255, 255, 0.5);
+      box-shadow: 
+        0 4px 10px rgba(0,0,0,0.1),
+        inset 2px 2px 5px rgba(255,255,255,0.4),
+        inset -2px -2px 5px rgba(0,0,0,0.05);
+      transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
+      color: var(--text-color);
+      position: relative;
+      overflow: hidden;
+    }
+
+    .glass-button::after {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: -100%;
+      width: 50%;
+      height: 100%;
+      background: linear-gradient(
+        to right,
+        rgba(255,255,255,0) 0%,
+        rgba(255,255,255,0.3) 50%,
+        rgba(255,255,255,0) 100%
+      );
+      transform: skewX(-25deg);
+      transition: 0.5s;
+    }
+
+    .glass-button:hover {
+      transform: translateY(-3px) scale(1.02);
+      box-shadow: 
+        0 8px 20px rgba(0,0,0,0.15),
+        inset 2px 2px 8px rgba(255,255,255,0.6);
+      background: linear-gradient(145deg, rgba(255,255,255,0.2), rgba(255,255,255,0.1));
+    }
+    
+    .glass-button:hover::after {
+      left: 150%;
+    }
+
+    .glass-button:active {
+      transform: translateY(1px) scale(0.98);
+      box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+    }
+
+    .glass-pill-bg {
+      background: rgba(255, 255, 255, 0.25);
+      box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+      backdrop-filter: blur(4px);
+    }
+
+    .text-custom { color: var(--text-color); }
+    .text-shadow-lg { text-shadow: 0 2px 10px rgba(0,0,0,0.2); }
+
+    .glass-input {
+      background: rgba(0, 0, 0, 0.1);
+      border: 1px solid rgba(255, 255, 255, 0.2);
+      box-shadow: inset 1px 1px 4px rgba(0,0,0,0.1);
+      color: var(--text-color);
+    }
+    .glass-input:focus {
+      background: rgba(0, 0, 0, 0.2);
+      outline: none;
+      border-color: rgba(255, 255, 255, 0.5);
+      box-shadow: inset 1px 1px 4px rgba(0,0,0,0.2);
+    }
+    
+    input[type=range] { -webkit-appearance: none; background: transparent; }
+    input[type=range]::-webkit-slider-thumb {
+      -webkit-appearance: none; height: 16px; width: 16px; border-radius: 50%;
+      background: #ffffff; cursor: pointer; margin-top: -6px; 
+      box-shadow: 0 2px 4px rgba(0,0,0,0.3); border: 2px solid rgba(255,255,255,0.8);
+    }
+    input[type=range]::-webkit-slider-runnable-track {
+      width: 100%; height: 4px; cursor: pointer; background: rgba(255,255,255,0.3); border-radius: 2px;
+    }
+  `;
+
+  return (
+    <div className="relative min-h-screen w-full overflow-hidden flex flex-col items-center justify-center font-sans">
+      <style>{styles}</style>
+
+      {/* --- LỚP HÌNH NỀN --- */}
+      <div className="absolute inset-0 z-0 bg-black">
+        <div 
+          className="w-full h-full transition-all duration-700"
+          style={{ 
+            filter: `brightness(${bgBrightness}) blur(${bgBlur}px)`,
+            transform: `scale(${1 + bgBlur/100})`
+          }}
+        >
+          {bgType === 'video' ? (
+            <video 
+              key={bgUrl} 
+              className="w-full h-full object-cover" 
+              autoPlay loop muted playsInline src={bgUrl}
+            />
+          ) : (
+            <img 
+              src={bgUrl} 
+              alt="Background" 
+              className="w-full h-full object-cover"
+            />
+          )}
+        </div>
+      </div>
+
+      {/* --- GIAO DIỆN CHÍNH --- */}
+      <div className="relative z-10 w-full max-w-lg px-4 flex flex-col items-center gap-8 text-custom">
+        
+        {/* Header rút gọn */}
+        <div className="w-full flex justify-center items-center mb-2">
+           <div className="flex items-center gap-2">
+              <div className={`w-2 h-2 rounded-full ${isActive ? 'bg-green-400 animate-pulse' : 'bg-red-400'}`}></div>
+              <span className="text-sm font-medium tracking-widest uppercase opacity-80 text-shadow-lg">Zen Focus</span>
+           </div>
+        </div>
+
+        {/* --- SETTINGS PANEL (Với Animation Expand) --- */}
+        {isSettingsOpen && (
+          // Thêm style transformOrigin để animation xuất phát từ vị trí nút Settings (dưới cùng bên phải panel)
+          <div 
+            className="w-full glass-element rounded-3xl p-6 animate-expand-settings backdrop-blur-2xl absolute z-50 bottom-24 shadow-2xl border border-white/40 overflow-hidden"
+            style={{ transformOrigin: 'calc(100% - 3rem) 100%' }}
+          >
+             
+             <div className="flex justify-between items-center mb-6 border-b border-white/10 pb-2">
+                <div className="flex gap-4">
+                  <button onClick={() => setActiveTab('timer')} className={`text-xs font-bold uppercase tracking-wider transition-all ${activeTab === 'timer' ? 'opacity-100 border-b-2 border-white' : 'opacity-50'}`}>Thời gian</button>
+                  <button onClick={() => setActiveTab('bg')} className={`text-xs font-bold uppercase tracking-wider transition-all ${activeTab === 'bg' ? 'opacity-100 border-b-2 border-white' : 'opacity-50'}`}>Hình nền</button>
+                  <button onClick={() => setActiveTab('style')} className={`text-xs font-bold uppercase tracking-wider transition-all ${activeTab === 'style' ? 'opacity-100 border-b-2 border-white' : 'opacity-50'}`}>Giao diện</button>
+                </div>
+                <button onClick={() => setIsSettingsOpen(false)} className="hover:rotate-90 transition-transform"><X size={18} /></button>
+             </div>
+
+             {/* Nội dung Settings */}
+             {activeTab === 'timer' && (
+               <div className="grid grid-cols-3 gap-4 mb-2 animate-in fade-in duration-300">
+                  {Object.keys(MODES).map((key) => (
+                    <div key={key} className="flex flex-col gap-2">
+                      <label className="text-xs opacity-60 ml-1 font-semibold">{MODES[key].label}</label>
+                      <input 
+                        type="number" 
+                        value={durations[key]}
+                        onChange={(e) => handleDurationChange(key, e.target.value)}
+                        className="glass-input w-full rounded-xl px-3 py-2 text-center text-sm font-medium"
+                      />
+                    </div>
+                  ))}
+               </div>
+             )}
+             {activeTab === 'bg' && (
+               <div className="space-y-4 animate-in fade-in duration-300">
+                 <div className="flex gap-2">
+                    <input type="text" placeholder="Link ảnh/video..." value={customInput} onChange={(e) => setCustomInput(e.target.value)} className="glass-input flex-1 rounded-xl px-3 py-2 text-sm" />
+                    <button onClick={handleUrlSubmit} className="glass-button px-3 rounded-xl"><Check size={18} /></button>
+                 </div>
+                 <div className="relative group">
+                    {/* Visual Button - Đặt lên trước */}
+                    <div className="w-full glass-button border-dashed flex items-center justify-center gap-2 py-3 rounded-xl hover:bg-white/10 transition-colors">
+                      <Upload size={16} /> <span className="text-sm font-medium">Tải file lên</span>
+                    </div>
+                    {/* Input - Đặt phía sau và thêm z-index để nằm đè lên trên */}
+                    <input 
+                      type="file" 
+                      accept="image/*,video/*" 
+                      onChange={handleFileUpload} 
+                      className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-50" 
+                    />
+                 </div>
+                 <div className="space-y-4 mt-4 pt-4 border-t border-white/10">
+                    <div className="flex items-center justify-between"><div className="flex items-center gap-2 opacity-80"><Sun size={14} /><span className="text-xs uppercase font-bold">Độ sáng</span></div><input type="range" min="0" max="2" step="0.1" value={bgBrightness} onChange={(e) => setBgBrightness(e.target.value)} className="w-1/2"/></div>
+                    <div className="flex items-center justify-between"><div className="flex items-center gap-2 opacity-80"><Eye size={14} /><span className="text-xs uppercase font-bold">Độ mờ</span></div><input type="range" min="0" max="20" step="1" value={bgBlur} onChange={(e) => setBgBlur(e.target.value)} className="w-1/2"/></div>
+                 </div>
+               </div>
+             )}
+             {activeTab === 'style' && (
+                <div className="space-y-4 animate-in fade-in duration-300">
+                   <div className="flex items-center justify-between"><div className="flex items-center gap-2 opacity-80"><Palette size={14} /><span className="text-xs uppercase font-bold">Độ đục kính</span></div><input type="range" min="0" max="1" step="0.05" value={glassOpacity} onChange={(e) => setGlassOpacity(e.target.value)} className="w-1/2"/></div>
+                   <div className="flex items-center justify-between"><div className="flex items-center gap-2 opacity-80"><Type size={14} /><span className="text-xs uppercase font-bold">Màu chữ</span></div><div className="flex items-center gap-2"><input type="color" value={textColor} onChange={(e) => setTextColor(e.target.value)} className="w-8 h-8 rounded-full cursor-pointer bg-transparent border border-white/30 p-0 shadow-sm"/><span className="text-xs opacity-50 font-mono">{textColor}</span></div></div>
+                   <div className="pt-2 text-right"><button onClick={() => { setBgBrightness(0.8); setBgBlur(0); setTextColor('#ffffff'); setGlassOpacity(0.1); }} className="text-xs underline opacity-50 hover:opacity-100">Khôi phục mặc định</button></div>
+                </div>
+             )}
+          </div>
+        )}
+
+        {/* --- THANH CHỌN CHẾ ĐỘ (SLIDING PILL) --- */}
+        {/* Đã thêm class glass-pill để bo tròn cực đại */}
+        <div className="glass-element glass-pill p-1.5 flex w-full max-w-sm relative overflow-hidden">
+          {/* Nền trượt (Sliding Background) */}
+          <div 
+            className="absolute top-1.5 bottom-1.5 glass-pill-bg rounded-full transition-all duration-300 ease-out"
+            style={{
+              width: 'calc(33.33% - 8px)',
+              left: `calc(${modeKeys.indexOf(mode) * 33.33}% + 4px)`
+            }}
+          />
+          
+          {/* Các nút bấm */}
+          {Object.entries(MODES).map(([key, m]) => (
+            <button
+              key={key}
+              onClick={() => changeMode(key)}
+              className={`flex-1 py-3 text-sm font-bold rounded-full relative z-10 transition-colors duration-300 ${
+                mode === key ? 'text-white' : 'opacity-60 hover:opacity-100'
+              }`}
+              style={{ color: textColor }}
+            >
+              {m.label}
+            </button>
+          ))}
+        </div>
+
+        {/* --- ĐỒNG HỒ --- */}
+        <div className="relative py-8">
+           <div className="text-[9rem] leading-none font-light tracking-tighter select-none tabular-nums relative z-10 drop-shadow-2xl">
+              {formatTime(timeLeft)}
+           </div>
+           
+           <div className="text-center opacity-70 text-sm tracking-[0.3em] font-light uppercase mt-2">
+              {isActive ? 'Đang tập trung' : 'Sẵn sàng?'}
+           </div>
+        </div>
+
+        {/* --- NÚT ĐIỀU KHIỂN CÂN ĐỐI --- */}
+        <div className="flex items-center gap-8 justify-center w-full">
+           {/* Nút Reset (Trái) */}
+           <button 
+             onClick={resetTimer}
+             className="glass-button w-16 h-16 rounded-full flex items-center justify-center opacity-90 hover:opacity-100"
+             title="Đặt lại"
+           >
+             <RotateCcw size={22} />
+           </button>
+
+           {/* Nút Play (Giữa - Hình tròn) */}
+           <button 
+             onClick={toggleTimer}
+             className={`
+               glass-button w-28 h-28 rounded-full flex items-center justify-center transition-all duration-300
+               hover:scale-105 active:scale-95 border-2
+               ${isActive ? 'bg-white/20 border-white/60 shadow-[0_0_40px_rgba(255,255,255,0.2)]' : 'bg-white/5 border-white/40'}
+             `}
+           >
+             {isActive ? (
+               <Pause size={48} fill="currentColor" className="opacity-90" />
+             ) : (
+               <Play size={48} fill="currentColor" className="ml-2 opacity-90" />
+             )}
+           </button>
+           
+           {/* Nút Settings (Phải) */}
+           <button 
+              onClick={() => setIsSettingsOpen(!isSettingsOpen)}
+              className={`glass-button w-16 h-16 rounded-full flex items-center justify-center opacity-90 hover:opacity-100 transition-all duration-500 ${isSettingsOpen ? 'bg-white/30 rotate-90 scale-90' : ''}`}
+              title="Cài đặt"
+            >
+              <Settings size={22} />
+            </button>
+        </div>
+
+      </div>
+    </div>
+  );
+};
+
+export default App;
